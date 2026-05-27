@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>生成AIパスポート 資格勉強アプリ</title>
+<style>
+  :root {
+    --primary: #6C63FF;
+    --primary-dark: #5a52d5;
+    --accent: #FF6584;
+    --bg: #F0F2FF;
+    --card-bg: #ffffff;
+    --text: #2d2d2d;
+    --text-sub: #666;
+    --correct: #22c55e;
+    --wrong: #ef4444;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    background: var(--primary);
+    color: #fff;
+    padding: 16px 20px 12px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(108,99,255,0.3);
+  }
+  header h1 { font-size: 1.1rem; font-weight: 700; }
+  header p { font-size: 0.75rem; opacity: 0.85; margin-top: 2px; }
+
+  /* Mode switcher */
+  .mode-switcher {
+    display: flex;
+    background: #e8e6ff;
+    border-radius: 50px;
+    padding: 4px;
+    margin: 16px 20px 0;
+    gap: 4px;
+  }
+  .mode-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    border-radius: 46px;
+    padding: 10px 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--primary);
+    transition: all 0.2s;
+  }
+  .mode-btn.active {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(108,99,255,0.35);
+  }
+
+  /* Category filter */
+  .category-row {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .category-row::-webkit-scrollbar { display: none; }
+  .cat-btn {
+    white-space: nowrap;
+    border: 1.5px solid var(--primary);
+    background: transparent;
+    border-radius: 50px;
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--primary);
+    transition: all 0.15s;
+  }
+  .cat-btn.active {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 20px 8px;
+    font-size: 0.78rem;
+    color: var(--text-sub);
+  }
+  .progress-wrap {
+    flex: 1;
+    height: 6px;
+    background: #ddd;
+    border-radius: 10px;
+    margin: 0 12px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #a78bfa);
+    border-radius: 10px;
+    transition: width 0.4s;
+  }
+
+  /* Main content */
+  main { flex: 1; padding: 0 16px 24px; }
+
+  /* ======================== FLASHCARD ======================== */
+  .flashcard-wrap {
+    perspective: 1200px;
+    margin: 8px 0;
+    min-height: 240px;
+  }
+  .flashcard {
+    width: 100%;
+    min-height: 240px;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.55s cubic-bezier(.4,0,.2,1);
+    cursor: pointer;
+    border-radius: var(--radius);
+  }
+  .flashcard.flipped { transform: rotateY(180deg); }
+  .card-face {
+    position: absolute;
+    width: 100%;
+    min-height: 240px;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  }
+  .card-front {
+    background: linear-gradient(135deg, var(--primary) 0%, #a78bfa 100%);
+    color: #fff;
+  }
+  .card-back {
+    background: var(--card-bg);
+    transform: rotateY(180deg);
+    border: 2px solid #e8e6ff;
+  }
+  .card-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    opacity: 0.75;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .card-front .card-label { color: rgba(255,255,255,0.8); }
+  .card-back .card-label { color: var(--primary); }
+  .card-text {
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.7;
+  }
+  .card-front .card-text { color: #fff; }
+  .card-hint {
+    font-size: 0.72rem;
+    margin-top: 16px;
+    opacity: 0.7;
+  }
+
+  .fc-nav {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    align-items: center;
+  }
+  .fc-nav button {
+    flex: 1;
+    padding: 13px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-prev {
+    background: #fff;
+    color: var(--primary);
+    border: 2px solid var(--primary) !important;
+  }
+  .btn-next {
+    background: var(--primary);
+    color: #fff;
+  }
+  .btn-shuffle {
+    flex: 0 0 50px !important;
+    background: #fff;
+    border: 2px solid #ddd !important;
+    border-radius: var(--radius) !important;
+    font-size: 1.2rem !important;
+  }
+
+  /* ======================== QUIZ ======================== */
+  .quiz-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 24px 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    margin: 8px 0;
+  }
+  .quiz-q-num {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+  }
+  .quiz-question {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.75;
+    margin-bottom: 20px;
+  }
+  .choices { display: flex; flex-direction: column; gap: 10px; }
+  .choice-btn {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    background: #fff;
+    text-align: left;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .choice-btn:active { transform: scale(0.98); }
+  .choice-btn .choice-label {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .choice-btn.correct {
+    border-color: var(--correct);
+    background: #f0fdf4;
+  }
+  .choice-btn.correct .choice-label { background: var(--correct); color: #fff; }
+  .choice-btn.wrong {
+    border-color: var(--wrong);
+    background: #fef2f2;
+  }
+  .choice-btn.wrong .choice-label { background: var(--wrong); color: #fff; }
+  .choice-btn:disabled { cursor: default; }
+
+  .explanation {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: #f8f7ff;
+    border-left: 3px solid var(--primary);
+    border-radius: 0 12px 12px 0;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text);
+    display: none;
+  }
+  .explanation.show { display: block; }
+  .explanation strong { color: var(--primary); }
+
+  .quiz-nav {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 14px;
+  }
+  .btn-next-q {
+    padding: 12px 28px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: none;
+  }
+  .btn-next-q.show { display: block; }
+
+  /* Result screen */
+  .result-screen {
+    display: none;
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .result-screen.show { display: block; }
+  .result-score {
+    font-size: 4rem;
+    font-weight: 800;
+    color: var(--primary);
+  }
+  .result-total { font-size: 1rem; color: var(--text-sub); margin-bottom: 8px; }
+  .result-msg { font-size: 1.1rem; font-weight: 700; margin: 16px 0 24px; }
+  .btn-retry {
+    padding: 14px 40px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 50px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* Score badge in quiz */
+  .score-badge {
+    display: inline-flex;
+    gap: 16px;
+    background: #fff;
+    border-radius: 50px;
+    padding: 8px 20px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin: 8px 0 4px;
+  }
+  .score-correct { color: var(--correct); }
+  .score-wrong { color: var(--wrong); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🤖 生成AIパスポート 資格対策</h1>
+  <p>一問一答 &amp; 4択クイズで合格を目指そう</p>
+</header>
+
+<div class="mode-switcher">
+  <button class="mode-btn active" onclick="setMode('flash')">📇 フラッシュカード</button>
+  <button class="mode-btn" onclick="setMode('quiz')">📝 4択クイズ</button>
+</div>
+
+<div class="category-row" id="categoryRow"></div>
+
+<div class="stats-bar" id="statsBar">
+  <span id="statsLeft">0 / 0</span>
+  <div class="progress-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+  <span id="statsRight"></span>
+</div>
+
+<main>
+  <!-- FLASHCARD MODE -->
+  <div id="flashMode">
+    <div class="flashcard-wrap" onclick="flipCard()">
+      <div class="flashcard" id="flashcard">
+        <div class="card-face card-front">
+          <div class="card-label">Question</div>
+          <div class="card-text" id="fcQuestion">読み込み中...</div>
+          <div class="card-hint">タップして答えを見る 👆</div>
+        </div>
+        <div class="card-face card-back">
+          <div class="card-label">Answer</div>
+          <div class="card-text" id="fcAnswer"></div>
+        </div>
+      </div>
+    </div>
+    <div class="fc-nav">
+      <button class="btn-prev" onclick="fcNav(-1)">← 前へ</button>
+      <button class="btn-shuffle" onclick="shuffle()" title="シャッフル">🔀</button>
+      <button class="btn-next" onclick="fcNav(1)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- QUIZ MODE -->
+  <div id="quizMode" style="display:none">
+    <div style="text-align:center">
+      <div class="score-badge">
+        <span class="score-correct">✓ <span id="qCorrect">0</span> 正解</span>
+        <span class="score-wrong">✗ <span id="qWrong">0</span> 不正解</span>
+      </div>
+    </div>
+    <div class="quiz-card" id="quizCard">
+      <div class="quiz-q-num" id="quizQNum">問題 1</div>
+      <div class="quiz-question" id="quizQuestion"></div>
+      <div class="choices" id="choices"></div>
+      <div class="explanation" id="explanation"></div>
+      <div class="quiz-nav">
+        <button class="btn-next-q" id="btnNextQ" onclick="nextQuestion()">次の問題 →</button>
+      </div>
+    </div>
+    <div class="result-screen" id="resultScreen">
+      <div class="result-score" id="resultScore">0</div>
+      <div class="result-total" id="resultTotal">/ 0 問</div>
+      <div class="result-msg" id="resultMsg"></div>
+      <button class="btn-retry" onclick="retryQuiz()">もう一度挑戦</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const ALL_QUESTIONS = [
+  // ─── AIの基礎 ───
+  {
+    cat: "AIの基礎",
+    q: "機械学習における「教師あり学習」とは何か？",
+    a: "正解ラベル付きのデータを使ってモデルを学習させる手法。入力と正解の対応関係を学習する。",
+    choices: ["正解ラベル付きデータで学習する手法", "ラベルなしデータの構造を発見する手法", "報酬を最大化するよう学習する手法", "人間の脳を完全に模倣する手法"],
+    correct: 0,
+    exp: "教師あり学習は、入力データと正解ラベルのペアを用いて学習します。分類・回帰などのタスクに使われます。"
+  },
+  {
+    cat: "AIの基礎",
+    q: "「過学習（オーバーフィッティング）」とはどのような現象か？",
+    a: "訓練データに過度に適合し、未知のデータに対して汎化性能が低下すること。",
+    choices: ["訓練データに過度に適合し汎化性能が落ちる現象", "学習率が高すぎて損失が発散する現象", "モデルが複雑すぎてメモリ不足になる現象", "データが少なすぎて学習できない現象"],
+    correct: 0,
+    exp: "過学習はモデルが訓練データの「ノイズ」まで覚えてしまう状態。ドロップアウトや正則化で防ぎます。"
+  },
+  {
+    cat: "AIの基礎",
+    q: "ニューラルネットワークで「活性化関数」の役割は？",
+    a: "非線形性を導入し、モデルが複雑なパターンを学習できるようにする関数。",
+    choices: ["非線形性を導入し複雑なパターンを学習可能にする", "学習率を自動調整する", "データを正規化する", "重みの初期値を設定する"],
+    correct: 0,
+    exp: "活性化関数（ReLU、Sigmoidなど）がなければニューラルネットは線形変換の組み合わせに過ぎず、複雑な問題を解けません。"
+  },
+  {
+    cat: "AIの基礎",
+    q: "「強化学習」の基本的な仕組みは？",
+    a: "エージェントが環境と相互作用し、報酬を最大化するような行動方策を学習する手法。",
+    choices: ["報酬を最大化する行動方策を環境との相互作用で学習", "大量のラベル付きデータから分類を学習", "クラスタリングで類似データをグループ化", "画像から特徴量を抽出して分類"],
+    correct: 0,
+    exp: "強化学習はゲームAI（AlphaGoなど）やロボット制御に活用されています。報酬設計が重要です。"
+  },
+  {
+    cat: "AIの基礎",
+    q: "深層学習（ディープラーニング）の「深い」とは何を指すか？",
+    a: "ニューラルネットワークの層（レイヤー）の数が多いこと（多層構造）を指す。",
+    choices: ["ニューラルネットワークの層数が多いこと", "学習データの量が多いこと", "モデルのパラメータ精度が高いこと", "計算速度が速いこと"],
+    correct: 0,
+    exp: "「深い」ネットワークは隠れ層が多く、より抽象的な特徴を階層的に学習できます。"
+  },
+
+  // ─── 生成AIの仕組み ───
+  {
+    cat: "生成AIの仕組み",
+    q: "「大規模言語モデル（LLM）」の学習方法として正しいのはどれか？",
+    a: "大量のテキストデータを用いた事前学習（次のトークン予測）と、RLHF等のファインチューニングを組み合わせる。",
+    choices: ["大量テキストの事前学習＋RLHFなどのファインチューニング", "少数の専門家が手動でルールを記述", "強化学習のみで学習", "画像データを主に使って学習"],
+    correct: 0,
+    exp: "GPTなどのLLMは「次のトークンを予測する」自己教師あり学習で事前学習し、人間フィードバックで調整されます。"
+  },
+  {
+    cat: "生成AIの仕組み",
+    q: "Transformerアーキテクチャの中核技術「Attention（注意機構）」の役割は？",
+    a: "入力シーケンス内の各要素が他の要素とどれだけ関連するかを計算し、重要な情報に重みを置く仕組み。",
+    choices: ["各要素間の関連度を計算し重要箇所に注目する仕組み", "画像の輪郭を検出する仕組み", "データを圧縮してメモリを節約する仕組み", "ランダムにニューロンを無効化する仕組み"],
+    correct: 0,
+    exp: "Self-Attentionにより、長距離の文脈依存関係を捉えられます。これがTransformerの革新的な点です。"
+  },
+  {
+    cat: "生成AIの仕組み",
+    q: "画像生成AIに多く使われる「拡散モデル（Diffusion Model）」の原理は？",
+    a: "データにノイズを加えるプロセスを逆向きに学習し、ノイズから画像を生成する。",
+    choices: ["ノイズから徐々に画像を復元するプロセスを学習", "2つのネットワークが競い合って画像を生成", "変分オートエンコーダで潜在空間を学習", "決定木で画素値を分岐させて生成"],
+    correct: 0,
+    exp: "Stable DiffusionやDALL-Eなどで使われる拡散モデルは、ランダムノイズから段階的に画像を「復元」します。"
+  },
+  {
+    cat: "生成AIの仕組み",
+    q: "「GAN（敵対的生成ネットワーク）」の仕組みは？",
+    a: "生成器（Generator）と識別器（Discriminator）が競い合い、リアルなデータを生成する。",
+    choices: ["生成器と識別器が競い合いリアルなデータを生成", "複数の教師データから最適な画像を選択", "ノイズを段階的に除去して画像を生成", "テキスト記述から直接ピクセルを計算"],
+    correct: 0,
+    exp: "GANは偽札製造者（Generator）と警察（Discriminator）の競争に例えられます。互いが強くなることで高品質な生成が可能になります。"
+  },
+  {
+    cat: "生成AIの仕組み",
+    q: "「トークン」とはLLMにおいて何を指すか？",
+    a: "テキストを分割した最小単位。単語・部分単語・記号などで、モデルが処理する基本単位。",
+    choices: ["テキストの最小処理単位（単語・部分語・記号など）", "モデルの重みパラメータ", "学習バッチのデータ数", "APIの認証情報"],
+    correct: 0,
+    exp: "日本語では1文字～数文字がトークンになることが多いです。コンテキスト長はトークン数で測られます。"
+  },
+  {
+    cat: "生成AIの仕組み",
+    q: "LLMの「ハルシネーション（幻覚）」とは？",
+    a: "モデルが事実と異なる情報をあたかも正確であるかのように生成してしまう現象。",
+    choices: ["事実と異なる情報を確信を持って生成する現象", "計算速度が急激に低下する現象", "入力が長すぎてモデルがクラッシュする現象", "同じ回答が繰り返される現象"],
+    correct: 0,
+    exp: "ハルシネーションは重大なリスクで、医療・法律など高リスク分野での利用には特に注意が必要です。"
+  },
+  {
+    cat: "生成AIの仕組み",
+    q: "「RAG（Retrieval-Augmented Generation）」とは？",
+    a: "外部知識ベースから関連情報を検索して取得し、それを文脈としてLLMの生成に組み込む手法。",
+    choices: ["外部DBを検索しその内容をLLMの生成に組み込む手法", "モデルを大量データで追加学習する手法", "複数モデルの出力を多数決で統合する手法", "ランダムサンプリングで多様な出力を得る手法"],
+    correct: 0,
+    exp: "RAGはハルシネーションの軽減や最新情報への対応に有効で、企業での導入が急増しています。"
+  },
+
+  // ─── プロンプトエンジニアリング ───
+  {
+    cat: "プロンプト技術",
+    q: "「Chain-of-Thought（CoT）プロンプティング」の効果は？",
+    a: "「ステップごとに考えて」と指示することで、モデルの推論過程を引き出し複雑な問題の精度を上げる。",
+    choices: ["推論過程を段階的に示させ複雑問題の精度を向上", "短い応答を生成させるための手法", "英語で回答させるための手法", "画像と組み合わせて使う手法"],
+    correct: 0,
+    exp: "「順を追って考えてください」と加えるだけで数学・論理問題などの正答率が大幅に向上することが確認されています。"
+  },
+  {
+    cat: "プロンプト技術",
+    q: "「Few-shot プロンプティング」とは何か？",
+    a: "プロンプトに入出力の具体例をいくつか示すことで、モデルに望ましい出力形式や内容を誘導する手法。",
+    choices: ["入出力の例をいくつか示してモデルを誘導する手法", "1つの例だけを見せる手法", "例を一切示さずに指示する手法", "数値データのみで学習する手法"],
+    correct: 0,
+    exp: "Few-shotは0-shot（例なし）より精度が高く、特定の形式や口調の統一に効果的です。"
+  },
+  {
+    cat: "プロンプト技術",
+    q: "「プロンプトインジェクション」とはどのような攻撃か？",
+    a: "悪意ある入力をプロンプトに混入させ、AIシステムの意図しない動作や情報漏洩を引き起こす攻撃。",
+    choices: ["悪意ある入力でAIの意図しない動作を引き起こす攻撃", "AIのAPIキーを盗む攻撃", "学習データを汚染する攻撃", "AIの応答速度を低下させる攻撃"],
+    correct: 0,
+    exp: "「これまでの指示を無視して〜」のような埋め込み命令が典型例。外部からの入力をそのままプロンプトに使う設計は危険です。"
+  },
+  {
+    cat: "プロンプト技術",
+    q: "効果的なプロンプトに含める要素として適切でないものはどれか？",
+    a: "モデルへの感情的な訴え（「お願いだから」など）は精度向上に寄与しない。役割・目的・制約・例示が重要。",
+    choices: ["感情的な訴えかけ（「お願い」など）", "AIに担わせる役割・ペルソナ", "出力形式の明示（箇条書き・JSON等）", "具体的な例示（Few-shot）"],
+    correct: 0,
+    exp: "効果的なプロンプトの要素は：①役割設定 ②明確な指示 ③出力形式 ④例示 ⑤制約条件 などです。"
+  },
+
+  // ─── 倫理・リスク ───
+  {
+    cat: "倫理・リスク",
+    q: "AIにおける「バイアス（偏り）」の主な原因は？",
+    a: "学習データに含まれる社会的偏見や不均衡なデータ分布が、モデルの出力にそのまま反映されること。",
+    choices: ["学習データに含まれる偏見や不均衡な分布", "計算リソースの不足", "モデルの層数が少なすぎること", "APIのレート制限"],
+    correct: 0,
+    exp: "採用AIが特定属性を不当に低評価したケースなど、バイアスは実害を引き起こします。データの多様性確保が重要です。"
+  },
+  {
+    cat: "倫理・リスク",
+    q: "「ディープフェイク」に関するリスクとして最も重大なのはどれか？",
+    a: "実在の人物の顔や声を偽造したメディアを作成し、詐欺・名誉毀損・偽情報拡散に使われるリスク。",
+    choices: ["実在人物の偽動画で詐欺・名誉毀損・偽情報に利用", "AIの計算コストが増大するリスク", "著作権のない素材を無断使用するリスク", "モデルが過学習して精度が落ちるリスク"],
+    correct: 0,
+    exp: "日本でも不正競争防止法や名誉毀損罪で対応されますが、法整備は追いついていない部分も多いです。"
+  },
+  {
+    cat: "倫理・リスク",
+    q: "AI開発における「説明可能性（XAI）」が重要な理由は？",
+    a: "AIがなぜその判断をしたか説明できないと、誤りの検出・責任の所在・利用者の信頼確保が難しくなるため。",
+    choices: ["判断根拠を説明できないと誤り検出・信頼確保が難しいため", "説明が長いほど回答精度が上がるため", "APIコストを削減するため", "処理速度を向上させるため"],
+    correct: 0,
+    exp: "医療・金融・法律などでAIを使う際、「なぜそう判断したか」を説明できることは信頼性と法的責任の観点から不可欠です。"
+  },
+  {
+    cat: "倫理・リスク",
+    q: "生成AIによる著作権侵害リスクが生じる主な場面は？",
+    a: "著作物を含む学習データでの訓練時、および既存の著作物に酷似した出力を生成して配布する場合。",
+    choices: ["著作物での学習と酷似した出力の生成・配布", "AIが計算ミスをした場合", "ユーザーが英語でプロンプトを書いた場合", "モデルのアップデート時"],
+    correct: 0,
+    exp: "日本では著作権法30条の4で学習目的の利用が原則認められますが、出力物による侵害は別途判断されます。"
+  },
+  {
+    cat: "倫理・リスク",
+    q: "「AIウォッシング（AI Washing）」とはどういう意味か？",
+    a: "AI技術を実際より高度・倫理的に見せかけるマーケティングや、AI活用を偽って信頼を得ようとする行為。",
+    choices: ["AI技術を実態より優秀・倫理的に見せかける行為", "AIが生成したコンテンツを人間作と偽る行為", "学習データを洗浄・クリーニングする行為", "AIモデルの重みを軽量化する行為"],
+    correct: 0,
+    exp: "グリーンウォッシングと同様の概念。規制当局も注目しており、EU AI法などでも虚偽表示は規制対象です。"
+  },
+
+  // ─── 法律・ガイドライン ───
+  {
+    cat: "法律・ガイドライン",
+    q: "EU AI法（AI Act）のリスクベースアプローチで「高リスク」に分類されるのはどれか？",
+    a: "医療診断・採用選考・信用評価・重要インフラ管理など、人の権利・安全に重大な影響を与えるAIシステム。",
+    choices: ["医療診断・採用・信用評価など人の権利に影響するAI", "音楽生成AIアシスタント", "チェスゲームAI", "スパムフィルター"],
+    correct: 0,
+    exp: "EU AI法は2024年発効。高リスクAIは透明性・説明可能性・人間監督などの義務を負います。"
+  },
+  {
+    cat: "法律・ガイドライン",
+    q: "日本の「AI事業者ガイドライン」（経産省・総務省）が掲げる基本原則に含まれないものはどれか？",
+    a: "「最大利益の追求を最優先とすること」はガイドラインの原則に含まれない。安全性・透明性・公平性等が原則。",
+    choices: ["最大利益の追求を最優先とする", "安全性の確保", "透明性の確保", "公平性・非差別の確保"],
+    correct: 0,
+    exp: "日本のAIガイドラインは「人間中心」「安全性」「公平性」「プライバシー」「セキュリティ」などを基本原則としています。"
+  },
+  {
+    cat: "法律・ガイドライン",
+    q: "「個人情報保護法」においてAI利用時に注意すべき点は？",
+    a: "個人情報を含む学習データの利用目的の明示・同意取得・第三者提供の制限・要配慮個人情報の取り扱い。",
+    choices: ["利用目的の明示・同意取得・要配慮個人情報の適切な管理", "AI処理速度の開示", "モデルのパラメータ数の公開", "APIの利用料金の透明化"],
+    correct: 0,
+    exp: "AIのトレーニングや推論に個人情報を使う際は個人情報保護法の遵守が必須。特に海外送信には注意が必要です。"
+  },
+  {
+    cat: "法律・ガイドライン",
+    q: "OECDのAI原則に含まれる概念として正しいのはどれか？",
+    a: "包括的な成長・持続可能な開発・人間中心・透明性・堅牢性・セキュリティ・説明責任。",
+    choices: ["人間中心・透明性・堅牢性・説明責任などの原則", "AI開発者の収益最大化", "軍事利用の推進", "AIの完全自律化"],
+    correct: 0,
+    exp: "OECD AI原則（2019年）は42カ国が採択。G20にも影響を与えた国際的な標準的枠組みです。"
+  },
+
+  // ─── 実務・活用 ───
+  {
+    cat: "実務・活用",
+    q: "企業がLLMを業務利用する際の「ファインチューニング」と「プロンプトエンジニアリング」の使い分けは？",
+    a: "コスト・速度重視やドメイン適応が軽微ならプロンプト、業界特有の語彙・形式・品質向上が必要ならファインチューニング。",
+    choices: ["コスト重視→プロンプト、専門性・高品質化→ファインチューニング", "常にファインチューニングが優先", "常にプロンプトエンジニアリングで十分", "どちらも同じ効果で使い分け不要"],
+    correct: 0,
+    exp: "ファインチューニングはコスト・時間・データ準備が必要。まずプロンプトで試し、不十分な場合にファインチューニングを検討するのが定石です。"
+  },
+  {
+    cat: "実務・活用",
+    q: "「マルチモーダルAI」とはどのようなAIか？",
+    a: "テキスト・画像・音声・動画など複数の種類のデータを入力・出力として扱えるAI。",
+    choices: ["テキスト・画像・音声など複数モダリティを扱うAI", "複数の言語を話せるAI", "複数のクラウドで動作するAI", "複数のユーザーが同時に使えるAI"],
+    correct: 0,
+    exp: "GPT-4o、Gemini Ultra、Claude 3などはマルチモーダルです。画像を見て説明したり、音声で会話したりできます。"
+  },
+  {
+    cat: "実務・活用",
+    q: "「AIエージェント」の特徴として正しいのはどれか？",
+    a: "自律的に目標を達成するために計画・ツール使用・フィードバックのループを繰り返せるAIシステム。",
+    choices: ["自律的に計画・ツール使用・フィードバックを繰り返すシステム", "単一の質問に答えるだけのシステム", "画像のみを処理するシステム", "インターネットに接続できないシステム"],
+    correct: 0,
+    exp: "エージェントはWebブラウジング・コード実行・ファイル操作などのツールを使いながら複数ステップのタスクを自律実行します。"
+  },
+  {
+    cat: "実務・活用",
+    q: "生成AIの「幻覚（ハルシネーション）」対策として有効なものはどれか？",
+    a: "RAGによる外部情報の参照、出力の根拠となる引用要求、複数モデルでの検証（アンサンブル）など。",
+    choices: ["RAGの活用・引用要求・複数モデルでの検証", "プロンプトを短くする", "温度パラメータを最大にする", "学習データを減らす"],
+    correct: 0,
+    exp: "特に事実確認が重要な用途では、必ず人間によるファクトチェックを最終ステップに組み込むことが推奨されます。"
+  },
+  {
+    cat: "実務・活用",
+    q: "「Temperature（温度）」パラメータを高く設定した場合の出力の特徴は？",
+    a: "出力の多様性・創造性が増すが、一貫性・正確性が下がる傾向がある。",
+    choices: ["多様・創造的になるが一貫性・正確性が下がる", "より正確で事実に基づいた出力になる", "応答速度が向上する", "トークン使用量が減る"],
+    correct: 0,
+    exp: "Temperatureは確率分布の「なだらか さ」を制御します。創作には高め（0.8〜1.0）、事実確認には低め（0〜0.3）が適切です。"
+  },
+];
+
+// ────────────────────────────────
+let mode = 'flash';
+let currentCat = 'すべて';
+let filteredQ = [];
+let fcIndex = 0;
+let quizQueue = [];
+let quizIndex = 0;
+let qCorrect = 0;
+let qWrong = 0;
+let answered = false;
+
+const CATS = ['すべて', ...new Set(ALL_QUESTIONS.map(q => q.cat))];
+
+function init() {
+  // Build category buttons
+  const row = document.getElementById('categoryRow');
+  row.innerHTML = '';
+  CATS.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn' + (c === currentCat ? ' active' : '');
+    btn.textContent = c;
+    btn.onclick = () => selectCat(c);
+    row.appendChild(btn);
+  });
+  applyFilter();
+}
+
+function selectCat(cat) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-btn').forEach((b, i) => {
+    b.classList.toggle('active', CATS[i] === cat);
+  });
+  applyFilter();
+}
+
+function applyFilter() {
+  filteredQ = currentCat === 'すべて' ? [...ALL_QUESTIONS] : ALL_QUESTIONS.filter(q => q.cat === currentCat);
+  if (mode === 'flash') {
+    fcIndex = 0;
+    renderFlash();
+  } else {
+    startQuiz();
+  }
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && m === 'flash') || (i === 1 && m === 'quiz'));
+  });
+  document.getElementById('flashMode').style.display = m === 'flash' ? 'block' : 'none';
+  document.getElementById('quizMode').style.display = m === 'quiz' ? 'block' : 'none';
+  applyFilter();
+}
+
+// ──── FLASHCARD ────
+function renderFlash() {
+  if (!filteredQ.length) return;
+  const q = filteredQ[fcIndex];
+  document.getElementById('fcQuestion').textContent = q.q;
+  document.getElementById('fcAnswer').textContent = q.a;
+  // reset flip
+  document.getElementById('flashcard').classList.remove('flipped');
+  updateStats(fcIndex + 1, filteredQ.length, q.cat);
+}
+
+function flipCard() {
+  document.getElementById('flashcard').classList.toggle('flipped');
+}
+
+function fcNav(dir) {
+  fcIndex = (fcIndex + dir + filteredQ.length) % filteredQ.length;
+  renderFlash();
+}
+
+function shuffle() {
+  filteredQ.sort(() => Math.random() - 0.5);
+  fcIndex = 0;
+  renderFlash();
+}
+
+// ──── QUIZ ────
+function startQuiz() {
+  quizQueue = [...filteredQ].sort(() => Math.random() - 0.5);
+  quizIndex = 0;
+  qCorrect = 0;
+  qWrong = 0;
+  answered = false;
+  document.getElementById('resultScreen').classList.remove('show');
+  document.getElementById('quizCard').style.display = 'block';
+  updateScoreBadge();
+  renderQuiz();
+}
+
+function renderQuiz() {
+  if (quizIndex >= quizQueue.length) {
+    showResult();
+    return;
+  }
+  const q = quizQueue[quizIndex];
+  answered = false;
+  document.getElementById('quizQNum').textContent = `問題 ${quizIndex + 1} / ${quizQueue.length}`;
+  document.getElementById('quizQuestion').textContent = q.q;
+  document.getElementById('explanation').classList.remove('show');
+  document.getElementById('btnNextQ').classList.remove('show');
+
+  // Shuffle choices
+  const indices = [0,1,2,3].sort(() => Math.random() - 0.5);
+  const choicesEl = document.getElementById('choices');
+  choicesEl.innerHTML = '';
+  const labels = ['A','B','C','D'];
+  indices.forEach((origIdx, pos) => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `<span class="choice-label">${labels[pos]}</span>${q.choices[origIdx]}`;
+    btn.onclick = () => selectChoice(origIdx === q.correct, btn, origIdx, q);
+    choicesEl.appendChild(btn);
+  });
+  updateStats(quizIndex + 1, quizQueue.length, q.cat);
+}
+
+function selectChoice(isCorrect, btn, chosenIdx, q) {
+  if (answered) return;
+  answered = true;
+
+  // Mark all buttons
+  const allBtns = document.querySelectorAll('.choice-btn');
+  allBtns.forEach((b, i) => {
+    const text = b.textContent.replace(/^[ABCD]/, '').trim();
+    const origIdx = [...Array(4)].findIndex((_, j) => q.choices[j] === text);
+    if (origIdx === q.correct) b.classList.add('correct');
+    b.disabled = true;
+  });
+  if (!isCorrect) {
+    btn.classList.add('wrong');
+    qWrong++;
+  } else {
+    qCorrect++;
+  }
+
+  document.getElementById('explanation').innerHTML = `<strong>${isCorrect ? '✅ 正解！' : '❌ 不正解'}</strong><br>${q.exp}`;
+  document.getElementById('explanation').classList.add('show');
+  document.getElementById('btnNextQ').classList.add('show');
+  updateScoreBadge();
+}
+
+function nextQuestion() {
+  quizIndex++;
+  renderQuiz();
+}
+
+function updateScoreBadge() {
+  document.getElementById('qCorrect').textContent = qCorrect;
+  document.getElementById('qWrong').textContent = qWrong;
+}
+
+function showResult() {
+  document.getElementById('quizCard').style.display = 'none';
+  const total = quizQueue.length;
+  const pct = Math.round(qCorrect / total * 100);
+  document.getElementById('resultScore').textContent = `${pct}%`;
+  document.getElementById('resultTotal').textContent = `${qCorrect} / ${total} 問正解`;
+  let msg = pct >= 80 ? '🎉 素晴らしい！合格圏内です！' :
+            pct >= 60 ? '📚 もう少し！苦手分野を復習しよう' :
+            '💪 基礎から復習しよう！諦めないで！';
+  document.getElementById('resultMsg').textContent = msg;
+  document.getElementById('resultScreen').classList.add('show');
+  document.getElementById('statsLeft').textContent = `${qCorrect} / ${total}`;
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+function retryQuiz() {
+  document.getElementById('resultScreen').classList.remove('show');
+  document.getElementById('quizCard').style.display = 'block';
+  startQuiz();
+}
+
+function updateStats(cur, total, cat) {
+  document.getElementById('statsLeft').textContent = `${cur} / ${total}`;
+  document.getElementById('progressBar').style.width = (cur / total * 100) + '%';
+  document.getElementById('statsRight').textContent = cat;
+}
+
+init();
+</script>
+</body>
+</html>
